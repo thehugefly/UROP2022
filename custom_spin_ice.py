@@ -151,12 +151,18 @@ geom = spintorch.geom.WaveGeometryArray_draw_and_train_x_multi(rho_train,(nx, ny
 
 '''Spin ice geometry '''
 Ms_Py = 750e3 # saturation magnetization of the nanomagnets (A/m)
-r0, dr, wm, lm, z_off = 20, 10, 2, 6, 5  # starting pos, period, magnet size, z distance
-rx, ry = int((nx-2*r0)/dr+1), int((ny-2*r0)/dr+1)
-rho1 = torch.zeros((rx, ry))  # Design parameter array
-rho2 = torch.zeros((rx-1, ry+1))  # Design parameter array
-geom = spintorch.geom.WaveGeometrySpinIce(rho1, rho2, (nx, ny), (dx, dy, dz), Ms, B0, 
-                                    r0, dr, wm, lm, z_off, rx, ry, Ms_Py)
+r0, dr, wm, lm, z_off = 15, 4, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
+dm=4
+#rx, ry = int((ny-2*r0)/dr+1), int((ny-2*r0)/dr+1)
+rx,ry=28,28
+
+r0_train= 142 ## Starting x point of the trainable array
+rx_train,ry_train = 60,28
+#rx_train,ry_train = int((nx-r0-r0_train)/dr),ry
+rho1_train = torch.zeros((rx_train, ry_train))  # Design parameter array
+rho2_train = torch.zeros((rx_train-1, ry_train+1))  # Design parameter array
+geom = spintorch.geom.WaveGeometrySpinIce2(rho1_train, rho2_train, (nx, ny), (dx, dy, dz), Ms, B0, 
+                                    r0, dr,dm, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_Py)
 
 
 
@@ -174,7 +180,6 @@ model.to(dev)   # sending model to GPU/CPU
 t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # time vector
 X = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
 INPUTS = X  # here we could cat multiple inputs
-print(INPUTS)
 
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) ## Change this learning rate
@@ -219,9 +224,9 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
             optimizer.zero_grad()
             
             rho_ = image[i][j]
+            print(len(image))
             ID = ID_list[i][j]
             label = get_mnist_label(ID)
-            print(rho_)
             u = model(INPUTS, rho_).sum(dim=1)
             
             spintorch.plot.plot_output(u[0,], OUTPUTS[i]+1, epoch, label, ID, plotdir)
