@@ -173,6 +173,7 @@ class WaveGeometryArray_draw_and_train_x_multi(WaveGeometry):
         self.ry = ry
         self.dm = dm
         self.z_off = z_off
+
         self.r0_train = r0_train
         self.rx_train = rx_train
         self.ry_train = ry_train
@@ -220,7 +221,8 @@ class WaveGeometryArray_draw_and_train_x_multi(WaveGeometry):
         
 #         for i in range(0, 2):
 #             m_rho[0, 2, r0:r0+rx*dr:dr, r0:r0+ry*dr:dr] = rho_binary[i:i+1]
-        
+        print(rx)
+        print(ry)
         m_rho[0, 2, r0:r0+rx*dr:dr, r0:r0+ry*dr:dr] = rho_binary
         m_rho_ = self.convolver(m_rho)[:,:,0:nx,0:ny]
 
@@ -334,16 +336,25 @@ class WaveGeometrySpinIce(WaveGeometry):
         self.wm = wm
         self.lm = lm
         self.z_off = z_off
+
+        ''' My code ttf19
+        self.r0_train = r0_train
+        self.rx_train = rx_train
+        self.ry_train = ry_train
+        '''
+
         self.register_buffer("beta", tensor(beta))
         self.register_buffer("Ms_magnet", tensor(Ms_magnet))
         self.rho1 = nn.Parameter(rho1.clone().detach())
         self.rho2 = nn.Parameter(rho2.clone().detach())
+
         self.convolver1 = nn.Conv2d(3, 3, (self.wm, self.lm), padding=(self.wm//2,self.lm//2),
                                     groups=3, bias=False)
         self.convolver1.weight.requires_grad = False
         self.convolver2 = nn.Conv2d(3, 3, (self.lm, self.wm), padding=(self.lm//2,self.wm//2),
                                     groups=3, bias=False)
         self.convolver2.weight.requires_grad = False
+
         
         for i in range(3):
             self.convolver1.weight[i, 0, ] = ones((wm, lm))
@@ -362,6 +373,9 @@ class WaveGeometrySpinIce(WaveGeometry):
         mu0 = 4*pi*1e-7
         nx, ny, nz = int(self.dim[0]), int(self.dim[1]), 1
         r0, dr, rx, ry = self.r0, self.dr, self.rx, self.ry
+
+        ''' My code ttf19
+        r0_train,rx_train,ry_train = self.r0_train,self.rx_train,self.ry_train'''
 
         rho_binary = rho
 
@@ -384,4 +398,107 @@ class WaveGeometrySpinIce(WaveGeometry):
         print("B",self.B)
         # save variables to plot in Matlab:
         io.savemat('magnets.mat', dict(m = m_rho_.detach().cpu().numpy(),B = self.B.detach().cpu().numpy()))
+        return self.B
+
+class WaveGeometrySpinIce2(WaveGeometry):
+    def __init__(self, rho1_train, rho2_train, dim: tuple, d: tuple, Ms: float, B0: float,
+                  r0: int, dr: int, dm: int, wm: int, lm: int, z_off: int, rx: int, ry: int, r0_train : int, rx_train : int,ry_train : int,
+                  Ms_magnet: float, beta: float = 100.0):
+
+        super().__init__(dim, d, B0, Ms)
+        self.r0 = r0
+        self.dr = dr
+        self.dm = dm # MUST REMOVE!
+        self.rx = rx
+        self.ry = ry
+        self.wm = wm
+        self.lm = lm
+        self.z_off = z_off
+
+        ''' My code ttf19'''
+        self.r0_train = r0_train
+        self.rx_train = rx_train
+        self.ry_train = ry_train
+        #end
+
+        self.register_buffer("beta", tensor(beta))
+        self.register_buffer("Ms_magnet", tensor(Ms_magnet))
+        self.rho1_train = nn.Parameter(rho1_train.clone().detach())
+        self.rho2_train = nn.Parameter(rho2_train.clone().detach())
+
+        self.convolver1 = nn.Conv2d(3, 3, (self.wm, self.lm), padding=(self.wm//2,self.lm//2),
+                                    groups=3, bias=False)
+        self.convolver1.weight.requires_grad = False
+        self.convolver2 = nn.Conv2d(3, 3, (self.lm, self.wm), padding=(self.lm//2,self.wm//2),
+                                    groups=3, bias=False)
+        self.convolver2.weight.requires_grad = False
+
+        # MUST REMOVE!
+        self.convolver = nn.Conv2d(3, 3, self.dm, padding=(self.dm//2),
+                                    groups=3, bias=False)
+        self.convolver.weight.requires_grad = False
+
+        
+        for i in range(3):
+            self.convolver1.weight[i, 0, ] = ones((wm, lm))
+            self.convolver2.weight[i, 0, ] = ones((lm, wm))
+            self.convolver.weight[i, 0, ] = ones((dm, dm)) # MUST REMOVE!
+        
+        self.demag_nanomagnet = Demag(self.dim, self.d)
+        Kx_fft, Ky_fft, Kz_fft = self.demag_nanomagnet.demag_tensor_fft(int(self.z_off))
+        self.register_buffer("Kx_fft", Kx_fft)
+        self.register_buffer("Ky_fft", Ky_fft)
+        self.register_buffer("Kz_fft", Kz_fft)
+
+        self.register_buffer("B", zeros((3,)+dim))
+        self.B[1,] += self.B0
+
+    def forward(self,rho):
+        #Note: rho is input mnist image and rho_train is trainable nanomagnet array
+        mu0 = 4*pi*1e-7
+        nx, ny, nz = int(self.dim[0]), int(self.dim[1]), 1
+        r0, dr, rx, ry = self.r0, self.dr, self.rx, self.ry
+
+        ''' My code ttf19'''
+        r0_train,rx_train,ry_train = self.r0_train,self.rx_train,self.ry_train
+        #end
+
+        rho1_train_binary = binarize(self.rho1_train)   
+        rho2_train_binary = binarize(self.rho2_train)
+        rho_binary = binarize(rho)
+
+        m_rho = zeros((1, 3, ) + self.dim, device=self.B0.device)
+
+        print(rho_binary.size)
+        m_rho[0, 2, r0:r0+rx*dr:dr, r0:r0+ry*dr:dr] = rho_binary
+        m_rho_ = self.convolver(m_rho)[:,:,0:nx,0:ny]
+
+        ''' My code ttf19'''
+        m_rho1_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
+        m_rho2_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
+        m_rho1_train[0, 1, r0_train-int(dr/2):r0_train+rx_train*dr-int(dr/2):dr, r0:r0+ry_train*dr:dr] = rho1_train_binary
+        m_rho2_train[0, 0, r0_train:r0_train+rx_train*dr-dr:dr, r0-int(dr/2):r0+ry_train*dr+int(dr/2):dr] = rho2_train_binary
+        m_rho_train_ = self.convolver1(m_rho1_train)[:,:,0:nx,0:ny]
+        m_rho_train_ += self.convolver2(m_rho2_train)[:,:,0:nx,0:ny]
+        #end
+
+        m_ = nn.functional.pad(m_rho_.unsqueeze(4), (0, nz, 0, ny, 0, nx))  
+        m_fft = fftn(m_, dim=(2,3))
+        B_demag = real(ifftn(torch.stack([sum((self.Kx_fft*m_fft),1),
+                                          sum((self.Ky_fft*m_fft),1),
+                                          sum((self.Kz_fft*m_fft),1)], 1), dim=(2,3)))
+        
+        '''My code ttf19'''
+        m_train_ = nn.functional.pad(m_rho_train_.unsqueeze(4), (0, nz, 0, ny, 0, nx))  
+        m_fft_train = fftn(m_train_, dim=(2,3))
+        B_demag_train = real(ifftn(torch.stack([sum((self.Kx_fft*m_fft_train),1),
+                                          sum((self.Ky_fft*m_fft_train),1),
+                                          sum((self.Kz_fft*m_fft_train),1)], 1), dim=(2,3)))
+        #end
+        
+        self.B = (B_demag[0,:,nx-1:2*nx-1,ny-1:2*ny-1,0]+B_demag_train[0,:,nx-1:2*nx-1,ny-1:2*ny-1,0])*self.Ms_magnet*mu0 #edited line (ttf19) to add train component
+        self.B[1,] += self.B0
+        print("B",self.B)
+        # save variables to plot in Matlab:
+        #io.savemat('magnets.mat', dict(m = m_rho_.detach().cpu().numpy(),B = self.B.detach().cpu().numpy()))
         return self.B
