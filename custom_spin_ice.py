@@ -28,7 +28,7 @@ if not os.path.isdir(savedir):
 dev = torch.device('cuda')  # 'cuda' or 'cpu' #####
 print('Running on', dev)
 
-epoch_number = 1 #####
+epoch_number = 10 #####
 epoch_init = -1 #####
 loss_T = 0          # threshold of loss, not used yet
 #random.seed(10)
@@ -40,7 +40,7 @@ print('loss_T', loss_T)
 n_writing = 2 ##### number of writings of each digit from 0 to 9
 print('number of writings', n_writing)
 
-Np = 10  # number of probes #####
+Np = 3  # number of probes #####
 probe_size = 2 #####
 
 OUTPUTS_list = [0,1,2,3,4,5,6,7,8,9]
@@ -74,7 +74,7 @@ def flatten_image(image,threshold):
 ID_list = []
 label_list = []
 
-for label in range(0,10):
+for label in range(0,Np): #Change end to add more digits (up to 10)
     ID_list_label = []       # IDs for one label
     
     for ID in range(0, 50):
@@ -151,18 +151,18 @@ geom = spintorch.geom.WaveGeometryArray_draw_and_train_x_multi(rho_train,(nx, ny
 
 '''Spin ice geometry '''
 Ms_Py = 750e3 # saturation magnetization of the nanomagnets (A/m)
-r0, dr, wm, lm, z_off = 15, 4, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
+r0, dr_input,dr_train, wm, lm, z_off = 15, 4, 10, 2, 6, 5  # borders!, period!, magnet width, magnet length!, z distance
 dm=4
 #rx, ry = int((ny-2*r0)/dr+1), int((ny-2*r0)/dr+1)
-rx,ry=28,28
+rx,ry=28,28 #to match mnist size
 
 r0_train= 142 ## Starting x point of the trainable array
-rx_train,ry_train = 60,28
+rx_train,ry_train = int((nx-r0-r0_train)/dr_train+1), int((ny-2*r0)/dr_train+1)
 #rx_train,ry_train = int((nx-r0-r0_train)/dr),ry
 rho1_train = torch.zeros((rx_train, ry_train))  # Design parameter array
 rho2_train = torch.zeros((rx_train-1, ry_train+1))  # Design parameter array
 geom = spintorch.geom.WaveGeometrySpinIce2(rho1_train, rho2_train, (nx, ny), (dx, dy, dz), Ms, B0, 
-                                    r0, dr,dm, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_Py)
+                                    r0, dr_input, dr_train,dm, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_Py)
 
 
 
@@ -224,7 +224,7 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
             optimizer.zero_grad()
             
             rho_ = image[i][j]
-            print(len(image))
+            #print(len(image))
             ID = ID_list[i][j]
             label = get_mnist_label(ID)
             u = model(INPUTS, rho_).sum(dim=1)
@@ -247,15 +247,20 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
             stat_cuda('after backward')
             toc()
             
+            #moved here
+            spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
+            mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
+            wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
+            '''
             if epoch >= epoch_init + epoch_number -1:
-                spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
+                #spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
                 if model.retain_history:
                     with torch.no_grad():
-                        mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
+                        #mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
                         #wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
                         #wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
-                        wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
-                        
+                        #wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
+            '''  
 
                        
     
