@@ -67,7 +67,7 @@ def geometry(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='
     B = geom.B[1,].detach().cpu().numpy().transpose()
 
     if ax is None:
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        fig, ax = plt.subplots(1, 1) #constrained_layout=True
         
     markers = []
     if not outline:
@@ -96,14 +96,15 @@ def geometry(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='
         fig.savefig(plotdir+'geometry_epoch%d.png' % (epoch))
         plt.close(fig)
 
-def geometry_multi(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='', label=0, ID = 0):
+def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='', label=0, ID = 0):
 
     geom = model.geom
     probes = model.probes
     sources = model.sources
     A = model.Alpha()[0, 0, ].squeeze()
     alph = A.min().cpu().numpy()
-    B = geom.B[1,].detach().cpu().numpy().transpose()
+    B1 = geom.B[1,].detach().cpu().numpy().transpose()
+    B0 = geom.B[0,].detach().cpu().numpy().transpose()
     
     
     '''My code ttf19'''
@@ -111,20 +112,32 @@ def geometry_multi(model, ax=None, outline=False, outline_pml=True, epoch=0, plo
     rho2_train = geom.rho2_train
     rx_train = geom.rx_train
     ry_train = geom.ry_train
+    rx = geom.rx
+    ry = geom.ry
     r0_train = geom.r0_train
     dr_train = geom.dr_train
+    dr_input = geom.dr_input
     wm = geom.wm
     lm = geom.lm
     r0 = geom.r0
 
-    rad_x = np.pi/2 - binarize(rho1_train).detach().cpu().numpy()*np.pi/2
-    rad_y = np.pi - binarize(rho2_train).detach().cpu().numpy()*np.pi/2
+    radx_train = np.pi/2 - binarize(rho1_train).detach().cpu().numpy()*np.pi/2
+    rady_train = np.pi - binarize(rho2_train).detach().cpu().numpy()*np.pi/2
 
-    xs_1 = np.arange(r0_train-int(dr_train/2),r0_train+rx_train*dr_train,dr_train)
-    ys_1 = np.arange(r0,r0+ry_train*dr_train + 0.5,dr_train)
+    radx_input = np.pi/2 - binarize(rho[0]).detach().cpu().numpy()*np.pi/2
+    rady_input = np.pi - binarize(rho[1]).detach().cpu().numpy()*np.pi/2
 
-    xs_2 = np.arange(r0_train,r0_train+rx_train*dr_train,dr_train)
-    ys_2 = np.arange(r0-int(dr_train/2),r0+ry_train*dr_train+int(dr_train/2)+0.5,dr_train)
+    xs1_train = np.arange(r0_train-int(dr_train/2),r0_train+rx_train*dr_train+int(dr_train/2)+0.5,dr_train)
+    ys1_train = np.arange(r0,r0+ry_train*dr_train + 0.5,dr_train)
+
+    xs1_input = np.arange(r0-int(dr_input/2),r0+rx*dr_input+int(dr_input/2)+0.5,dr_input) 
+    ys1_input = np.arange(r0,r0+ry*dr_input+0.5,dr_input)
+    
+    xs2_train = np.arange(r0_train,r0_train+rx_train*dr_train+0.5,dr_train)
+    ys2_train = np.arange(r0-int(dr_train/2),r0+ry_train*dr_train+int(dr_train/2)+0.5,dr_train)
+
+    xs2_input = np.arange(r0,r0+rx*dr_input,dr_input)
+    ys2_input = np.arange(r0-int(dr_input/2),r0+ry*dr_input+int(dr_input/2)+0.5,dr_input)
 
     cmap = mpl.cm.get_cmap('hsv')
     norm = mcolors.Normalize(vmin= 0,vmax = 2*np.pi)
@@ -132,7 +145,7 @@ def geometry_multi(model, ax=None, outline=False, outline_pml=True, epoch=0, plo
 
 
     if ax is None:
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        fig, ax = plt.subplots(1, 1) #constrained_layout=True 
         
     markers = []
     if not outline:
@@ -141,14 +154,14 @@ def geometry_multi(model, ax=None, outline=False, outline_pml=True, epoch=0, plo
             h1 = ax.imshow(Msat, origin="lower", cmap=plt.cm.summer)
             plt.colorbar(h1, ax=ax, fraction=0.02, pad=0.04,label='Saturation magnetization (A/m)')
         else:
-            h1 = ax.imshow(B*1e3, origin="lower", cmap=plt.cm.summer)
+            h1 = ax.imshow(B1*1e3, origin="lower", cmap=plt.cm.summer)
             plt.colorbar(h1, ax=ax,fraction=0.02, pad=0.04,label='Magnetic field (mT)')
     else:
         if isinstance(model.geom, WaveGeometryMs):
             Msat = geom.Msat.detach().cpu().numpy().transpose()
             ax.contour(Msat, levels=1, cmap=plt.cm.Greys, linewidths=[0.75], alpha=1)
         else:
-            ax.contour(B, levels=1, cmap=plt.cm.Greys, linewidths=[0.75], alpha=1)
+            ax.contour(B1, levels=1, cmap=plt.cm.Greys, linewidths=[0.75], alpha=1)
 
     if outline_pml:
         b_boundary = A.cpu().numpy().transpose()
@@ -158,20 +171,55 @@ def geometry_multi(model, ax=None, outline=False, outline_pml=True, epoch=0, plo
     markers += _plot_sources(sources, ax)
 
     '''My code ttf19'''
-    for x in range(rx_train):
-        for y in range(ry_train):
-            rect = patches.Rectangle((xs_1[x]-lm/2, ys_1[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_x[x][y])))
-            ax.add_patch(rect)
-    for x in range(rx_train-1):
-        for y in range(ry_train+1):
-            rect = patches.Rectangle((xs_2[x]-wm/2, ys_2[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_y[x][y])))
-            ax.add_patch(rect)
-
-    plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax,fraction=0.02, pad=0.04,label='Magnetisation angle')
-    #end
 
     if plotdir:
         fig.savefig(plotdir+'geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
+        plt.close(fig)
+
+    '''My code ttf19'''
+    for x in range(rx_train):
+        for y in range(ry_train):
+            rect = patches.Rectangle((xs1_train[x]-lm/2, ys1_train[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(radx_train[x][y])))
+            ax.add_patch(rect)
+    for x in range(rx_train-1):
+        for y in range(ry_train+1):
+            rect = patches.Rectangle((xs2_train[x]-wm/2, ys2_train[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rady_train[x][y])))
+            ax.add_patch(rect)
+
+    for x in range(rx+1):
+        for y in range(ry):
+            rect = patches.Rectangle((xs1_input[x]-lm/2, ys1_input[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(radx_input[x][y])))
+            ax.add_patch(rect)
+    for x in range(rx):
+        for y in range(ry+1):
+            rect = patches.Rectangle((xs2_input[x]-wm/2, ys2_input[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rady_input[x][y])))
+            ax.add_patch(rect)
+    
+    
+    plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax,fraction=0.02, pad=0.04,label='Magnetisation angle')
+
+    if plotdir:
+        fig.savefig(plotdir+'mag_geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
+        plt.close(fig)
+    #end
+
+    '''Quiver plot'''
+    fig, ax = plt.subplots(1, 1)
+
+    markers = []
+
+    if outline_pml:
+        b_boundary = A.cpu().numpy().transpose()
+        ax.contour(b_boundary, levels=[alph*1.0001], colors=['k'], linestyles=['dotted'], linewidths=[0.75], alpha=1)
+
+    markers += _plot_probes(probes, ax)
+    markers += _plot_sources(sources, ax)
+
+    ax.quiver(B0*1e3,B1*1e3-60,minlength=0)
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    if plotdir:
+        fig.savefig(plotdir+'quiver_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
 
         

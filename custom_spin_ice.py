@@ -8,6 +8,7 @@ from spintorch.plot import wave_integrated, wave_snapshot
 import matplotlib.pyplot as plt
 import warnings
 import sys
+from spintorch.binarize import binarize
 #import random
 
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")    
@@ -60,6 +61,7 @@ def get_mnist_label(ID):
     label = idx2numpy.convert_from_file(file)
     return(label[ID])
 
+'''
 def flatten_image(image,threshold):
     image_new = np.zeros((len(image),len(image[0])))
     for i in range(len(image)):
@@ -68,6 +70,22 @@ def flatten_image(image,threshold):
                 image_new[i][j] = -1
             else:
                 image_new[i][j] = 1
+    return(image_new)
+'''
+def flatten_image(image):
+    image_new = np.zeros((len(image),len(image[0])))
+    for i in range(len(image)):
+        for j in range(len(image[i])):
+            if image[i][j]<51:
+                image_new[i][j] = 2
+            elif image[i][j]<51+51:
+                image_new[i][j] = 1
+            elif image[i][j]<51+51+51:
+                image_new[i][j] = 0
+            elif image[i][j]<51+51+51+52:
+                image_new[i][j] = -1
+            else:
+                image_new[i][j] = -2
     return(image_new)
 
 
@@ -95,8 +113,10 @@ OUTPUTS = torch.tensor(OUTPUTS_list).to(dev)
 print('desired outputs', OUTPUTS_list)
 
 # get image of each ID
-image = [[],[],[],[],[],[],[],[],[],[]]
-
+image = []
+for i in range(Np):
+    image.append([])
+'''
 for i in range(0, len(ID_list)):
     for j in range(0, len(ID_list[i])):
         ID = ID_list[i][j]
@@ -105,7 +125,36 @@ for i in range(0, len(ID_list)):
         rot_image = np.rot90(flat_image, k=3, axes=(0, 1)).copy()
         rho_image = torch.tensor(rot_image)
         image[i].append(rho_image)
-        
+'''
+for i in range(0, len(ID_list)):
+    for j in range(0, len(ID_list[i])):
+        ID = ID_list[i][j]
+        digit = get_mnist_image(ID)
+        flat_image = flatten_image(digit)
+        rot_image = np.rot90(flat_image, k=3, axes=(0, 1)).copy()
+        rho_x = np.pad(flat_image,((0,1),(0,0))) + np.pad(flat_image,((1,0),(0,0)))
+        rho_y = np.pad(flat_image,((0,0),(0,1))) + np.pad(flat_image,((0,0),(1,0)))
+        for x in range(len(rho_x)):
+            for y in range(len(rho_x[x])):
+                if x==0:
+                    rho_x[x][y] = rho_x[x+1][y]
+                if x==len(rho_x[x]):
+                    rho_x[x][y] = rho_x[x-1][y]
+                if rho_x[x][y] == 0:
+                    rho_x[x][y] = rho_x[x-1][y]
+        rho_x = torch.tensor(rho_x)
+
+        for x in range(len(rho_y)):
+            for y in range(len(rho_y[x])):
+                if x==0:
+                    rho_y[x][y] = rho_y[x+1][y]
+                if x==len(rho_y[x]):
+                    rho_y[x][y] = rho_y[x-1][y]
+                if rho_y[x][y] == 0:
+                    rho_y[x][y] = rho_y[x-1][y]
+        rho_y = torch.tensor(rho_y)
+        image[i].append([rho_x,rho_y])
+
 
 """Other Parameters"""
 
@@ -123,7 +172,7 @@ dz = 20e-9      # discretization (m)
 nx = 142+4*60+15      # size x    (cells)
 ny = 141       # size y    (cells)
 
-Ms = 140e3      # saturation magnetization (A/m)
+Ms = 140e3      # saturation magnetization (A/m) 800e3
 B0 = 60e-3      # bias field (T)
 Bt = Bt       # excitation field amplitude (T)
 f1 = frequency       # source frequency (Hz)
@@ -150,8 +199,8 @@ geom = spintorch.geom.WaveGeometryArray_draw_and_train_x_multi(rho_train,(nx, ny
 '''
 
 '''Spin ice geometry '''
-Ms_Py = 750e3 # saturation magnetization of the nanomagnets (A/m)
-r0, dr_input,dr_train, wm, lm, z_off = 15, 4, 10, 2, 6, 5  # borders!, period!, magnet width, magnet length!, z distance
+Ms_Py = 1 # saturation magnetization of the nanomagnets (A/m)
+r0, dr_input,dr_train, wm, lm, z_off = 15, 4, 6, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
 dm=4
 #rx, ry = int((ny-2*r0)/dr+1), int((ny-2*r0)/dr+1)
 rx,ry=28,28 #to match mnist size
@@ -159,8 +208,8 @@ rx,ry=28,28 #to match mnist size
 r0_train= 142 ## Starting x point of the trainable array
 rx_train,ry_train = int((nx-r0-r0_train)/dr_train+1), int((ny-2*r0)/dr_train+1)
 #rx_train,ry_train = int((nx-r0-r0_train)/dr),ry
-rho1_train = torch.zeros((rx_train, ry_train))  # Design parameter array
-rho2_train = torch.zeros((rx_train-1, ry_train+1))  # Design parameter array
+rho1_train = torch.zeros((rx_train+1, ry_train))  # Design parameter array
+rho2_train = torch.zeros((rx_train, ry_train+1))  # Design parameter array
 geom = spintorch.geom.WaveGeometrySpinIce2(rho1_train, rho2_train, (nx, ny), (dx, dy, dz), Ms, B0, 
                                     r0, dr_input, dr_train,dm, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_Py)
 
@@ -248,9 +297,9 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
             toc()
             
             #moved here
-            spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
+            spintorch.plot.geometry_multi(model,rho_,epoch=epoch, plotdir=plotdir, label=label, ID = ID)
             mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
-            wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
+            #wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
             '''
             if epoch >= epoch_init + epoch_number -1:
                 #spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
@@ -276,3 +325,5 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
                 }, savedir + 'model_e%d.pt' % (epoch))
+
+# %%

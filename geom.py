@@ -7,6 +7,7 @@ from .demag import Demag
 from .binarize import binarize
 from numpy import pi
 from scipy import io
+import numpy as np
 
 
 
@@ -411,7 +412,7 @@ class WaveGeometrySpinIce2(WaveGeometry):
         self.r0 = r0
         self.dr_input = dr_input
         self.dr_train = dr_train
-        self.dm = dm # MUST REMOVE!
+        #self.dm = dm # MUST REMOVE!
         self.rx = rx
         self.ry = ry
         self.wm = wm
@@ -436,16 +437,18 @@ class WaveGeometrySpinIce2(WaveGeometry):
                                     groups=3, bias=False)
         self.convolver2.weight.requires_grad = False
 
+        '''
         # MUST REMOVE!
         self.convolver = nn.Conv2d(3, 3, self.dm, padding=(self.dm//2),
                                     groups=3, bias=False)
         self.convolver.weight.requires_grad = False
+        '''
 
         
         for i in range(3):
             self.convolver1.weight[i, 0, ] = ones((wm, lm))
             self.convolver2.weight[i, 0, ] = ones((lm, wm))
-            self.convolver.weight[i, 0, ] = ones((dm, dm)) # MUST REMOVE!
+            #self.convolver.weight[i, 0, ] = ones((dm, dm)) # MUST REMOVE!
         
         self.demag_nanomagnet = Demag(self.dim, self.d)
         Kx_fft, Ky_fft, Kz_fft = self.demag_nanomagnet.demag_tensor_fft(int(self.z_off))
@@ -468,19 +471,25 @@ class WaveGeometrySpinIce2(WaveGeometry):
 
         rho1_train_binary = binarize(self.rho1_train)   
         rho2_train_binary = binarize(self.rho2_train)
-        rho_binary = binarize(rho)
+        rho1_binary = binarize(rho[0])
+        rho2_binary = binarize(rho[1])
 
 
-        m_rho = zeros((1, 3, ) + self.dim, device=self.B0.device)
+        m_rho1 = zeros((1, 3, ) + self.dim, device=self.B0.device)
+        m_rho2 = zeros((1, 3, ) + self.dim, device=self.B0.device)
 
-        m_rho[0, 2, r0:r0+rx*dr_input:dr_input, r0:r0+ry*dr_input:dr_input] = rho_binary
-        m_rho_ = self.convolver(m_rho)[:,:,0:nx,0:ny]
+
+        m_rho1[0, 1, r0-int(dr_input/2):r0+rx*dr_input+int(dr_input/2):dr_input, r0:r0+ry*dr_input:dr_input] = rho1_binary
+        m_rho2[0, 0, r0:r0+rx*dr_input:dr_input, r0-int(dr_input/2):r0+ry*dr_input+int(dr_input/2):dr_input] = rho2_binary
+        m_rho_ = self.convolver1(m_rho1)[:,:,0:nx,0:ny]
+        m_rho_ += self.convolver2(m_rho2)[:,:,0:nx,0:ny]
+
 
         ''' My code ttf19'''
         m_rho1_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
         m_rho2_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
-        m_rho1_train[0, 1, r0_train-int(dr_train/2):r0_train+rx_train*dr_train-int(dr_train/2):dr_train, r0:r0+ry_train*dr_train:dr_train] = rho1_train_binary
-        m_rho2_train[0, 0, r0_train:r0_train+rx_train*dr_train-dr_train:dr_train, r0-int(dr_train/2):r0+ry_train*dr_train+int(dr_train/2):dr_train] = rho2_train_binary
+        m_rho1_train[0, 1, r0_train-int(dr_train/2):r0_train+rx_train*dr_train+int(dr_train/2):dr_train, r0:r0+ry_train*dr_train:dr_train] = rho1_train_binary
+        m_rho2_train[0, 0, r0_train:r0_train+rx_train*dr_train:dr_train, r0-int(dr_train/2):r0+ry_train*dr_train+int(dr_train/2):dr_train] = rho2_train_binary
         m_rho_train_ = self.convolver1(m_rho1_train)[:,:,0:nx,0:ny]
         m_rho_train_ += self.convolver2(m_rho2_train)[:,:,0:nx,0:ny]
         #end
