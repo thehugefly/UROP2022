@@ -2,6 +2,7 @@ import torch
 import os
 import spintorch
 import numpy as np
+import numpy.random as npr
 import idx2numpy
 from spintorch.utils import tic, toc, stat_cuda
 from spintorch.plot import wave_integrated, wave_snapshot
@@ -61,6 +62,14 @@ def get_mnist_label(ID):
     label = idx2numpy.convert_from_file(file)
     return(label[ID])
 
+def bar_flip(loc,rho_x,rho_y,angle,count):
+    if count>30:
+        angle =npr.randint(0,4)/2
+    if int(angle)==angle: 
+        rho_x[loc[0]+1-int(angle)][loc[1]] = -rho_x[loc[0]+1-int(angle)][loc[1]]
+    if int(angle)!=angle:
+        rho_y[loc[0]][loc[1]+1-int(angle-0.5)] = -rho_y[loc[0]][loc[1]+1-int(angle-0.5)]
+    return rho_x,rho_y
 '''
 def flatten_image(image,threshold):
     image_new = np.zeros((len(image),len(image[0])))
@@ -136,24 +145,30 @@ for i in range(0, len(ID_list)):
         rho_y = np.pad(flat_image,((0,0),(0,1))) + np.pad(flat_image,((0,0),(1,0)))
         for x in range(len(rho_x)):
             for y in range(len(rho_x[x])):
-                if x==0:
-                    rho_x[x][y] = rho_x[x+1][y]
-                if x==len(rho_x[x]):
-                    rho_x[x][y] = rho_x[x-1][y]
                 if rho_x[x][y] == 0:
                     rho_x[x][y] = rho_x[x-1][y]
-        rho_x = torch.tensor(rho_x)
-
         for x in range(len(rho_y)):
             for y in range(len(rho_y[x])):
-                if x==0:
-                    rho_y[x][y] = rho_y[x+1][y]
-                if x==len(rho_y[x]):
-                    rho_y[x][y] = rho_y[x-1][y]
                 if rho_y[x][y] == 0:
                     rho_y[x][y] = rho_y[x-1][y]
-        rho_y = torch.tensor(rho_y)
-        image[i].append([rho_x,rho_y])
+    
+        ''' #Uncomment to remove metastable high energy states in input SI
+        change=1
+        count=0
+        while change>0:
+            count+=1
+            if count>1000:
+                break
+            change=0
+            for x in range(len(rho_x)-1):
+                for y in range(len(rho_x[0])):
+                    #print(x,y)
+                    if np.sign(rho_x[x][y])==np.sign(rho_y[x][y]) and np.sign(rho_x[x+1][y])==np.sign(rho_y[x][y+1]) and np.sign(rho_x[x][y])!=np.sign(rho_x[x+1][y]):
+                        gamma = np.abs([flat_image[x+1][y]-rho_x[x+1][y],flat_image[x][y+1]-rho_y[x][y+1],flat_image[x-1][y]-rho_x[x][y],flat_image[x][y-1]-rho_y[x][y]])
+                        rho_x,rho_y = bar_flip([x,y],rho_x,rho_y,np.argmax(gamma)/2,count)
+                        change+=1
+        '''
+        image[i].append([torch.tensor(rho_x),torch.tensor(rho_y)])
 
 
 """Other Parameters"""
@@ -161,6 +176,8 @@ for i in range(0, len(ID_list)):
 frequency = 5.5e9
 Bt = 2.5e-3
 learning_rate = 0.05
+r0, dr_input,dr_train, wm, lm, z_off = 15, 6, 6, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
+mnist_size=28
 
 print('frequency:',frequency)
 print('Bt:', Bt)
@@ -169,10 +186,11 @@ print('learning_rate:', learning_rate)
 dx = 50e-9      # discretization (m)
 dy = 50e-9      # discretization (m)
 dz = 20e-9      # discretization (m)
-nx = 142+4*60+15      # size x    (cells)
-ny = 141       # size y    (cells)
+ny = mnist_size*dr_input+r0*2       # size y    (cells)
+nx = ny+dr_train*60+r0      # size x    (cells)
 
-Ms = 140e3      # saturation magnetization (A/m) 800e3
+
+Ms_sheet = 140e3      # saturation magnetization of 2-D sheet (A/m) 140e3 YiG, 8e5 Permalloy
 B0 = 60e-3      # bias field (T)
 Bt = Bt       # excitation field amplitude (T)
 f1 = frequency       # source frequency (Hz)
@@ -199,19 +217,17 @@ geom = spintorch.geom.WaveGeometryArray_draw_and_train_x_multi(rho_train,(nx, ny
 '''
 
 '''Spin ice geometry '''
-Ms_Py = 1 # saturation magnetization of the nanomagnets (A/m)
-r0, dr_input,dr_train, wm, lm, z_off = 15, 4, 6, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
-dm=4
+Ms_magnet = 1 # saturation magnetization of the nanomagnets (A/m) 140e3 YiG , 8e5 Permalloy
 #rx, ry = int((ny-2*r0)/dr+1), int((ny-2*r0)/dr+1)
-rx,ry=28,28 #to match mnist size
+rx,ry=mnist_size,mnist_size #to match mnist size
 
-r0_train= 142 ## Starting x point of the trainable array
+r0_train= ny ## Starting x point of the trainable array
 rx_train,ry_train = int((nx-r0-r0_train)/dr_train+1), int((ny-2*r0)/dr_train+1)
 #rx_train,ry_train = int((nx-r0-r0_train)/dr),ry
 rho1_train = torch.zeros((rx_train+1, ry_train))  # Design parameter array
 rho2_train = torch.zeros((rx_train, ry_train+1))  # Design parameter array
-geom = spintorch.geom.WaveGeometrySpinIce2(rho1_train, rho2_train, (nx, ny), (dx, dy, dz), Ms, B0, 
-                                    r0, dr_input, dr_train,dm, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_Py)
+geom = spintorch.geom.WaveGeometrySpinIce2(rho1_train, rho2_train, (nx, ny), (dx, dy, dz), Ms_sheet, B0, 
+                                    r0, dr_input, dr_train, wm, lm, z_off, rx, ry,r0_train,rx_train,ry_train, Ms_magnet)
 
 
 

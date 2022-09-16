@@ -43,7 +43,7 @@ def _plot_probes(probes, ax):
     markers = []
     for i, probe in enumerate(probes):
         x,y = probe.coordinates()
-        marker, = ax.plot(x,y,'.',markeredgecolor='none',markerfacecolor='k',markersize=4,alpha=0.8)
+        marker, = ax.plot(x,y,'.',markeredgecolor='none',markerfacecolor='k',markersize=3,alpha=0.8)
         markers.append(marker)
     return markers
 
@@ -52,7 +52,7 @@ def _plot_sources(sources, ax):
     markers = []
     for i, source in enumerate(sources):
         x,y = source.coordinates()
-        marker, = ax.plot(x,y,'.',markeredgecolor='none',markerfacecolor='g',markersize=4,alpha=0.8)
+        marker, = ax.plot(x,y,'.',markeredgecolor='none',markerfacecolor='g',markersize=3,alpha=0.8)
         markers.append(marker)
     return markers
 
@@ -121,12 +121,11 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     lm = geom.lm
     r0 = geom.r0
 
-    radx_train = np.pi/2 - binarize(rho1_train).detach().cpu().numpy()*np.pi/2
-    rady_train = np.pi - binarize(rho2_train).detach().cpu().numpy()*np.pi/2
+    # Angle of magnetisation direction in x-y plane. Units of pi
+    rad_train = [1./2 - binarize(rho1_train).detach().cpu().numpy()/2,1. - binarize(rho2_train).detach().cpu().numpy()/2]
+    rad_input = [1./2-binarize(rho[0]).detach().cpu().numpy()/2.,1.-binarize(rho[1]).detach().cpu().numpy()/2]
 
-    radx_input = np.pi/2 - binarize(rho[0]).detach().cpu().numpy()*np.pi/2
-    rady_input = np.pi - binarize(rho[1]).detach().cpu().numpy()*np.pi/2
-
+    # x and y positions of magnets for train then input. 1: magnets oriented in x direction. 2: oriented in y direction.
     xs1_train = np.arange(r0_train-int(dr_train/2),r0_train+rx_train*dr_train+int(dr_train/2)+0.5,dr_train)
     ys1_train = np.arange(r0,r0+ry_train*dr_train + 0.5,dr_train)
 
@@ -140,12 +139,12 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     ys2_input = np.arange(r0-int(dr_input/2),r0+ry*dr_input+int(dr_input/2)+0.5,dr_input)
 
     cmap = mpl.cm.get_cmap('hsv')
-    norm = mcolors.Normalize(vmin= 0,vmax = 2*np.pi)
+    norm = mcolors.Normalize(vmin= 0,vmax = 2)
     #end
 
 
     if ax is None:
-        fig, ax = plt.subplots(1, 1) #constrained_layout=True 
+        fig, ax = plt.subplots(1, 1) #constrained_layout=True Commented out because threw error
         
     markers = []
     if not outline:
@@ -176,36 +175,47 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
         fig.savefig(plotdir+'geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
 
-    '''My code ttf19'''
+    #Display magnets and their magnetisation direction
     for x in range(rx_train):
         for y in range(ry_train):
-            rect = patches.Rectangle((xs1_train[x]-lm/2, ys1_train[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(radx_train[x][y])))
+            rect = patches.Rectangle((xs1_train[x]-lm/2, ys1_train[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_train[0][x][y])))
             ax.add_patch(rect)
     for x in range(rx_train-1):
         for y in range(ry_train+1):
-            rect = patches.Rectangle((xs2_train[x]-wm/2, ys2_train[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rady_train[x][y])))
+            rect = patches.Rectangle((xs2_train[x]-wm/2, ys2_train[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_train[1][x][y])))
             ax.add_patch(rect)
 
     for x in range(rx+1):
         for y in range(ry):
-            rect = patches.Rectangle((xs1_input[x]-lm/2, ys1_input[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(radx_input[x][y])))
+            rect = patches.Rectangle((xs1_input[x]-lm/2, ys1_input[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_input[0][x][y])))
             ax.add_patch(rect)
     for x in range(rx):
         for y in range(ry+1):
-            rect = patches.Rectangle((xs2_input[x]-wm/2, ys2_input[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rady_input[x][y])))
+            rect = patches.Rectangle((xs2_input[x]-wm/2, ys2_input[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_input[1][x][y])))
             ax.add_patch(rect)
+
     
+    ''' #Uncomment this code to mark metastable high energy states in input
+    x_HES_input = [] #HES = high energy state
+    y_HES_input = []
+    for x in range(rx):
+        for y in range(ry):
+            if rad_input[0][x][y]-rad_input[0][x+1][y]!=0 and rad_input[1][x][y]-rad_input[1][x][y+1]!=0 and rad_input[0][x][y]-rad_input[1][x][y]==-0.5:
+                x_HES_input.append(x)
+                y_HES_input.append(y)
+    y_HES = r0 + np.array(y_HES_input)*dr_input
+    x_HES = r0 + np.array(x_HES_input)*dr_input
+    ax.plot(x_HES,y_HES,'o',color='k',markersize=5)
+    '''
     
     plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax,fraction=0.02, pad=0.04,label='Magnetisation angle')
 
     if plotdir:
         fig.savefig(plotdir+'mag_geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
-    #end
 
-    '''Quiver plot'''
-    fig, ax = plt.subplots(1, 1)
-
+    # Arrow plot
+    fig, ax = plt.subplots()
     markers = []
 
     if outline_pml:
@@ -214,6 +224,25 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
 
     markers += _plot_probes(probes, ax)
     markers += _plot_sources(sources, ax)
+
+    #Display magnets and their magnetisation direction
+    for x in range(rx_train):
+        for y in range(ry_train):
+            rect = patches.Rectangle((xs1_train[x]-lm/2, ys1_train[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_train[0][x][y])))
+            ax.add_patch(rect)
+    for x in range(rx_train-1):
+        for y in range(ry_train+1):
+            rect = patches.Rectangle((xs2_train[x]-wm/2, ys2_train[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_train[1][x][y])))
+            ax.add_patch(rect)
+
+    for x in range(rx+1):
+        for y in range(ry):
+            rect = patches.Rectangle((xs1_input[x]-lm/2, ys1_input[y]-wm/2), lm, wm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_input[0][x][y])))
+            ax.add_patch(rect)
+    for x in range(rx):
+        for y in range(ry+1):
+            rect = patches.Rectangle((xs2_input[x]-wm/2, ys2_input[y]-lm/2), wm, lm, linewidth=1, edgecolor='k', facecolor=cmap(norm(rad_input[1][x][y])))
+            ax.add_patch(rect)
 
     ax.quiver(B0*1e3,B1*1e3-60,minlength=0)
     plt.gca().set_aspect('equal', adjustable='box')
@@ -248,4 +277,3 @@ def wave_snapshot(model, m_snap, filename='', clabel='m'):
     if filename:
         fig.savefig(filename)
         plt.close(fig)
-        
