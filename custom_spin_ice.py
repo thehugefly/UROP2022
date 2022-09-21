@@ -177,6 +177,7 @@ frequency = 5.5e9
 Bt = 2.5e-3
 learning_rate = 0.05
 r0, dr_input,dr_train, wm, lm, z_off = 15, 6, 6, 1, 3, 5  # borders!, period!, magnet width, magnet length!, z distance
+#r0, dr_input,dr_train, wm, lm, z_off = 15, 30, 30, 1, 3, 5
 mnist_size=28
 
 print('frequency:',frequency)

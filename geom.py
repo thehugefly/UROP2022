@@ -429,12 +429,12 @@ class WaveGeometrySpinIce2(WaveGeometry):
         self.rho2_train = nn.Parameter(rho2_train.clone().detach())
 
         #Note: convolver1 used to convolve x direction magnets. colvolver2 for y direction
-        self.convolver1 = nn.Conv2d(3, 3, (self.wm, self.lm), padding=(self.wm//2,self.lm//2),
-                                    groups=3, bias=False)
-        self.convolver1.weight.requires_grad = False
-        self.convolver2 = nn.Conv2d(3, 3, (self.lm, self.wm), padding=(self.lm//2,self.wm//2),
+        self.convolver2 = nn.Conv2d(3, 3, (self.wm, self.lm), padding=(self.wm//2,self.lm//2),
                                     groups=3, bias=False)
         self.convolver2.weight.requires_grad = False
+        self.convolver1 = nn.Conv2d(3, 3, (self.lm, self.wm), padding=(self.lm//2,self.wm//2),
+                                    groups=3, bias=False)
+        self.convolver1.weight.requires_grad = False
 
         ''' #Old convolver for up/down magnets
         # MUST REMOVE!
@@ -444,8 +444,8 @@ class WaveGeometrySpinIce2(WaveGeometry):
         '''
 
         for i in range(3):
-            self.convolver1.weight[i, 0, ] = ones((wm, lm))
-            self.convolver2.weight[i, 0, ] = ones((lm, wm))
+            self.convolver2.weight[i, 0, ] = ones((wm, lm))
+            self.convolver1.weight[i, 0, ] = ones((lm, wm))
         
         self.demag_nanomagnet = Demag(self.dim, self.d)
         Kx_fft, Ky_fft, Kz_fft = self.demag_nanomagnet.demag_tensor_fft(int(self.z_off))
@@ -472,16 +472,18 @@ class WaveGeometrySpinIce2(WaveGeometry):
         #Placing magnetisation of each nanomagnet in right position and convolving both x and y direction magnets into m_rho
         m_rho1 = zeros((1, 3, ) + self.dim, device=self.B0.device)
         m_rho2 = zeros((1, 3, ) + self.dim, device=self.B0.device)
-        #Are the magnets placed in the right tensor index? Plot m_rho?
-        m_rho1[0, 1, r0-int(dr_input/2):r0+rx*dr_input+int(dr_input/2):dr_input, r0:r0+ry*dr_input:dr_input] = rho1_binary
-        m_rho2[0, 0, r0:r0+rx*dr_input:dr_input, r0-int(dr_input/2):r0+ry*dr_input+int(dr_input/2):dr_input] = rho2_binary
+        #Are the magnets placed in the right tensor index? Plot m_rho? Flipped
+        m_rho1[0, 0, r0-int(dr_input/2):r0+rx*dr_input+int(dr_input/2):dr_input, r0:r0+ry*dr_input:dr_input] = rho1_binary
+        m_rho2[0, 1, r0:r0+rx*dr_input:dr_input, r0-int(dr_input/2):r0+ry*dr_input+int(dr_input/2):dr_input] = rho2_binary
         m_rho_ = self.convolver1(m_rho1)[:,:,0:nx,0:ny]
         m_rho_ += self.convolver2(m_rho2)[:,:,0:nx,0:ny]
+        self.m_rho = m_rho_.clone()
+        print(self.m_rho.size())
 
         m_rho1_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
         m_rho2_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
-        m_rho1_train[0, 1, r0_train-int(dr_train/2):r0_train+rx_train*dr_train+int(dr_train/2):dr_train, r0:r0+ry_train*dr_train:dr_train] = rho1_train_binary
-        m_rho2_train[0, 0, r0_train:r0_train+rx_train*dr_train:dr_train, r0-int(dr_train/2):r0+ry_train*dr_train+int(dr_train/2):dr_train] = rho2_train_binary
+        m_rho1_train[0, 0, r0_train-int(dr_train/2):r0_train+rx_train*dr_train+int(dr_train/2):dr_train, r0:r0+ry_train*dr_train:dr_train] = rho1_train_binary
+        m_rho2_train[0, 1, r0_train:r0_train+rx_train*dr_train:dr_train, r0-int(dr_train/2):r0+ry_train*dr_train+int(dr_train/2):dr_train] = rho2_train_binary
         m_rho_train_ = self.convolver1(m_rho1_train)[:,:,0:nx,0:ny]
         m_rho_train_ += self.convolver2(m_rho2_train)[:,:,0:nx,0:ny]
 

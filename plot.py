@@ -105,6 +105,7 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     alph = A.min().cpu().numpy()
     B1 = geom.B[1,].detach().cpu().numpy().transpose()
     B0 = geom.B[0,].detach().cpu().numpy().transpose()
+    m_rho = geom.m_rho.detach().cpu().numpy().transpose()
     
     
     '''My code ttf19'''
@@ -169,12 +170,12 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     markers += _plot_probes(probes, ax)
     markers += _plot_sources(sources, ax)
 
-    '''My code ttf19'''
 
     if plotdir:
         fig.savefig(plotdir+'geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
 
+    '''
     #Display magnets and their magnetisation direction
     for x in range(rx_train):
         for y in range(ry_train):
@@ -213,6 +214,7 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     if plotdir:
         fig.savefig(plotdir+'mag_geometry_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
+    '''
 
     # Arrow plot
     fig, ax = plt.subplots()
@@ -250,6 +252,18 @@ def geometry_multi(model,rho, ax=None, outline=False, outline_pml=True, epoch=0,
     if plotdir:
         fig.savefig(plotdir+'quiver_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
         plt.close(fig)
+
+    #fig, ax = plt.subplots(ncols=3)
+    #print("plot",shape(m_rho))
+    #ax[0].pcolor(m_rho[0][0])
+    #ax[1].pcolor(m_rho[0][1])
+    #ax[2].pcolor(m_rho[0][2])
+    #plt.gca().set_aspect('equal', adjustable='box')
+    if plotdir:
+        fig.savefig(plotdir+'m_rho1_epoch%d_L%d_ID%d.png' % (epoch , label, ID))
+        plt.close(fig)
+    
+
 
         
 def wave_integrated(model, m_history, filename=''):
