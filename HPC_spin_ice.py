@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
 
 '''Directories and parameters to change each time'''
 
-basedir = 'custom_spin_ice/' #####
+basedir = 'HPC_spin_ice/' #####
 
 plotdir = 'plots/' + basedir
 if not os.path.isdir(plotdir):
@@ -280,23 +280,16 @@ else:
 
 
 print('----------------train-------------------')
-
 tic()
 model.retain_history = True
-
 for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
     loss_batch = 0
 
-    print("Epoch start: %d ------------" % (epoch))
-    
+    #print("Epoch start: %d ------------" % (epoch))
     for i in range(0, len(ID_list)): #select one label of digits
-        
         for j in range(0, len(ID_list[i])): #select the specific writing of that label
-            
             optimizer.zero_grad()
-            
             rho_ = image[i][j]
-            #print(len(image))
             ID = ID_list[i][j]
             label = get_mnist_label(ID)
             u = model(INPUTS, rho_).sum(dim=1)
@@ -305,10 +298,10 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
             loss = my_loss(u,OUTPUTS[i:i+1])
             loss_batch += loss.item()
             
-            print('ID',ID)
-            print('label',label)
-            print('loss',loss.item())
-            print('loss_batch',loss_batch)
+            #print('ID',ID)
+            #print('label',label)
+            #print('loss',loss.item())
+            #print('loss_batch',loss_batch)
             
             stat_cuda('after forward')
             
@@ -318,21 +311,22 @@ for epoch in range(epoch_init+1, epoch_init+epoch_number+1):
                 
             stat_cuda('after backward')
             toc()
-            
+            ''' 
             #moved here
             spintorch.plot.geometry_multi(model,rho_,epoch=epoch, plotdir=plotdir, label=label, ID = ID)
             mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
             #wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
             '''
             if epoch >= epoch_init + epoch_number -1:
-                #spintorch.plot.geometry_multi(model, epoch=epoch, plotdir=plotdir, label=label, ID = ID)
-                if model.retain_history:
-                    with torch.no_grad():
+                spintorch.plot.geometry_multi(model,rho_,epoch=epoch, plotdir=plotdir, label=label, ID = ID)
+                mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
+                wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
+                #if model.retain_history:
+                    #with torch.no_grad():
                         #mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
                         #wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
                         #wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
-                        #wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID)))
-            '''  
+                        #wave_integrated(model, mz, (plotdir+'integrated_epoch%d_L%d_ID%d.png' % (epoch, label, ID))) 
 
                        
     

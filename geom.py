@@ -1,5 +1,8 @@
 """Modules for representing the trained parameters"""
 
+"""This file (geom.py) defines the geometry of the magnets. 
+The forward function of each class outputs the magnetic field caused by these magnets"""
+
 import torch
 from torch import nn, sum, tensor, zeros, ones, real
 from torch.fft import fftn, ifftn
@@ -12,13 +15,13 @@ import numpy as np
 
 
 class WaveGeometry(nn.Module):
-    def __init__(self, dim: tuple, d: tuple, B0: float, Ms: float):
+    def __init__(self, dim: tuple, d: tuple, B0: float, Ms_sheet: float):
         super().__init__()
 
         self.dim = dim
         self.d   = d
         self.register_buffer("B0", tensor(B0))
-        self.register_buffer("Ms", tensor(Ms))
+        self.register_buffer("Ms_sheet", tensor(Ms_sheet))
 
 
     def forward(self): 
@@ -405,11 +408,11 @@ class WaveGeometrySpinIce(WaveGeometry):
 
 class WaveGeometrySpinIce2(WaveGeometry):
     '''Define the device geometry in the case of square spin ice input and training array'''
-    def __init__(self, rho1_train, rho2_train, dim: tuple, d: tuple, Ms: float, B0: float,
+    def __init__(self, rho1_train, rho2_train, dim: tuple, d: tuple, Ms_sheet: float, B0: float,
                   r0: int, dr_input: int, dr_train: int, wm: int, lm: int, z_off: int, rx: int, ry: int, r0_train : int, rx_train : int,ry_train : int,
                   Ms_magnet: float, beta: float = 100.0):
 
-        super().__init__(dim, d, B0, Ms)
+        super().__init__(dim, d, B0, Ms_sheet)
         self.r0 = r0
         self.dr_input = dr_input
         self.dr_train = dr_train
@@ -472,13 +475,12 @@ class WaveGeometrySpinIce2(WaveGeometry):
         #Placing magnetisation of each nanomagnet in right position and convolving both x and y direction magnets into m_rho
         m_rho1 = zeros((1, 3, ) + self.dim, device=self.B0.device)
         m_rho2 = zeros((1, 3, ) + self.dim, device=self.B0.device)
-        #Are the magnets placed in the right tensor index? Plot m_rho? Flipped
         m_rho1[0, 0, r0-int(dr_input/2):r0+rx*dr_input+int(dr_input/2):dr_input, r0:r0+ry*dr_input:dr_input] = rho1_binary
         m_rho2[0, 1, r0:r0+rx*dr_input:dr_input, r0-int(dr_input/2):r0+ry*dr_input+int(dr_input/2):dr_input] = rho2_binary
         m_rho_ = self.convolver1(m_rho1)[:,:,0:nx,0:ny]
         m_rho_ += self.convolver2(m_rho2)[:,:,0:nx,0:ny]
         self.m_rho = m_rho_.clone()
-        print(self.m_rho.size())
+        #print(self.m_rho.size())
 
         m_rho1_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
         m_rho2_train = zeros((1, 3, ) + self.dim, device=self.B0.device)
