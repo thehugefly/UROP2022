@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import warnings
 import sys
 from spintorch.binarize import binarize
+from keras.datasets import mnist
 #import random
 
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")    
@@ -30,7 +31,7 @@ if not os.path.isdir(savedir):
 dev = torch.device('cuda')  # 'cuda' or 'cpu' #####
 print('Running on', dev)
 
-epoch_number = 10 #####
+epoch_number = 50 #####
 epoch_init = -1 #####
 loss_T = 0          # threshold of loss, not used yet
 #random.seed(10)
@@ -52,15 +53,13 @@ OUTPUTS_list = [0,1,2,3,4,5,6,7,8,9]
 
 '''input and output'''
 
+(train_image, train_label), (test_image, test_label) = mnist.load_data()
+
 def get_mnist_image(ID):
-    file = 'train-images.idx3-ubyte'
-    arr = idx2numpy.convert_from_file(file)
-    return(arr[ID])
+    return train_image[ID]
 
 def get_mnist_label(ID):
-    file = 'train-labels.idx1-ubyte'
-    label = idx2numpy.convert_from_file(file)
-    return(label[ID])
+    return train_label[ID]
 
 def bar_flip(loc,rho_x,rho_y,angle,count):
     if count>30:
