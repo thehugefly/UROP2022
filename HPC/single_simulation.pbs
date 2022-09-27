@@ -1,0 +1,26 @@
+## interpreter directive - this is a shell script
+#!/bin/sh
+#
+## ask PBS for time (format hh:mm:ss)
+#PBS -l walltime=72:00:00
+#
+## ask for one node with 16 cpus and total 2gb memory (per node)
+#PBS -l select=1:ncpus=1:ngpus=1:mem=96GB:gpu_type=RTX6000
+##Number of parallel jobs that you want to submit (up to 6000 I think)
+#
+## Ask to join GPU queue
+#
+#
+#
+#
+#
+##load application module
+module load anaconda3/personal
+module load cuda/10.2
+#
+#
+## Change to the right directory
+cd $HOME/HPC_code/
+#
+## Run the python file
+python HPC_spin_ice.py

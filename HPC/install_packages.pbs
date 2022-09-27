@@ -1,0 +1,41 @@
+## interpreter directive - this is a shell script
+#!/bin/sh
+#
+## ask PBS for time (format hh:mm:ss)
+#PBS -l walltime=72:00:00
+#
+## ask for one node with 16 cpus and total 2gb memory (per node)
+#PBS -l select=1:ncpus=4:ngpus=1:mem=4GB
+##Number of parallel jobs that you want to submit (up to 6000 I think)
+
+#
+## Ask to join GPU queue
+#
+#
+#
+#
+#
+##load application module
+module load anaconda3/personal
+module load cuda/10.2
+
+conda install numpy==1.22.4
+y
+
+
+conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=10.2 -c pytorch
+y
+
+conda install matplotlib
+y
+
+conda install tensorflow
+y
+
+conda install numba
+y
+
+conda install scikit-image
+y
+
+
